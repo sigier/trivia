@@ -1,4 +1,4 @@
-# 🧠 Trivia - Fullstack App
+# Trivia - Fullstack App
 Trivia application consists of a **React frontend**, a **Node.js backend powered by Express**, and a **MongoDB database**.
 
 
