@@ -93,3 +93,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     Name = "trivia"
   }
 }
+
+output "cloudfront_distribution_id" {
+  value = aws_cloudfront_distribution.frontend.id
+}
