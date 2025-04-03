@@ -6,7 +6,59 @@ on:
       - main
 
 jobs:
+  create-tf-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Check and Create S3 Bucket for Terraform State
+        env:
+          TF_STATE_BUCKET_NAME: ${{ secrets.TF_STATE_BUCKET_NAME }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          echo "Checking if S3 bucket $TF_STATE_BUCKET_NAME exists..."
+
+          # Check if the bucket exists and get its region
+          BUCKET_EXISTS=$(aws s3api list-buckets --query "Buckets[].Name" --output text | grep -w "$TF_STATE_BUCKET_NAME" || echo "notfound")
+
+          if [ "$BUCKET_EXISTS" != "notfound" ]; then
+            echo "S3 Bucket $TF_STATE_BUCKET_NAME already exists."
+
+            # Get the existing bucket's region
+            BUCKET_REGION=$(aws s3api get-bucket-location --bucket "$TF_STATE_BUCKET_NAME" --query "LocationConstraint" --output text)
+            if [ "$BUCKET_REGION" = "null" ]; then BUCKET_REGION="us-east-1"; fi  # AWS returns 'null' for us-east-1
+
+            # Compare regions
+            if [ "$BUCKET_REGION" != "$AWS_REGION" ]; then
+              echo "Error: S3 bucket $TF_STATE_BUCKET_NAME exists but in region $BUCKET_REGION, expected $AWS_REGION."
+              exit 1  # Stop execution if the region does not match
+            fi
+
+            echo "Enabling versioning on existing S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET_NAME" --versioning-configuration Status=Enabled || echo "⚠️ Versioning may already be enabled."
+
+            echo "Enabling server-side encryption on existing S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-encryption --bucket "$TF_STATE_BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' || echo "⚠️ Encryption may already be set."
+
+          else
+            echo "Creating S3 Bucket: $TF_STATE_BUCKET_NAME in region $AWS_REGION"
+            aws s3api create-bucket --bucket "$TF_STATE_BUCKET_NAME" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+
+            echo "Enabling versioning on newly created S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET_NAME" --versioning-configuration Status=Enabled
+
+            echo "Enabling server-side encryption on newly created S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-encryption --bucket "$TF_STATE_BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          fi
+
   deploy:
+    needs: create-tf-backend
     runs-on: ubuntu-latest
 
     steps:
@@ -33,10 +85,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Upload to S3
-        run: aws s3 sync ./frontend/dist s3://trivia-app422025-bucket --delete
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
 
       - name: Init Terraform with backend config
+        working-directory: ./terraform
         env:
           TF_STATE_BUCKET_NAME: ${{ secrets.TF_STATE_BUCKET_NAME }}
           TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
@@ -48,13 +101,17 @@ jobs:
             -backend-config="region=$AWS_REGION"
 
       - name: Apply Terraform
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: terraform apply -auto-approve
-
-      - name: Get CloudFront Distribution ID from Terraform
+        working-directory: ./terraform
         run: |
-          echo "CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
+          terraform apply -auto-approve \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="aws_region=${{ secrets.AWS_REGION }}"
+
+      - name: Upload to S3
+        run: aws s3 sync ./frontend/dist s3://trivia-app422025-bucket --delete
 
       - name: Invalidate CloudFront cache
-        run: aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+        run: |
+          aws cloudfront create-invalidation \
+          --distribution-id "${{ secrets.AWS_CF_DISTRIBUTION_ID }}" \
+          --paths "/*"
