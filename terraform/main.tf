@@ -51,7 +51,7 @@ origin {
   origin_id   = "S3Origin"
 
   s3_origin_config {
-    origin_access_identity = "" 
+     origin_access_identity = "" 
   }
 }
 
@@ -69,7 +69,7 @@ origin {
 
     viewer_protocol_policy = "redirect-to-https"
   }
-
+  price_class = "PriceClass_100"
   custom_error_response {
     error_code         = 404
     response_code      = 200
