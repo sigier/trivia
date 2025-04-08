@@ -19,14 +19,15 @@ app.use(express.urlencoded());
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-const mongoDbUri = process.env.NODE_ENV == "production" ?
-   : process.env.MONGODB_URI;
-console.log(process.env.MONGODB_URI);
+const mongoDbUri: string =
+  process.env.NODE_ENV === "production"
+    ? process.env.MONGODB_URI ?? "mongodb://localhost:27017/trivia"
+    : "mongodb://localhost:27017/trivia";
+
 const db = mongoose.connect(mongoDbUri, {
   connectTimeoutMS: 1000,
-  tlsCAFile:
-    process.env.NODE_ENV == "production" ? "global-bundle.pem" : undefined,
 });
+
 db.catch((err) => {
   console.log(`Failed to connect to mongodb: ${mongoDbUri}`);
   console.log(err);

@@ -1,0 +1,153 @@
+name: Fullstack Deploy to AWS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  create-tf-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Check and Create S3 Bucket for Terraform State
+        env:
+          TF_STATE_BUCKET_NAME: ${{ secrets.TF_STATE_BUCKET_NAME }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          echo "Checking if S3 bucket $TF_STATE_BUCKET_NAME exists..."
+
+          # Check if the bucket exists and get its region
+          BUCKET_EXISTS=$(aws s3api list-buckets --query "Buckets[].Name" --output text | grep -w "$TF_STATE_BUCKET_NAME" || echo "notfound")
+
+          if [ "$BUCKET_EXISTS" != "notfound" ]; then
+            echo "S3 Bucket $TF_STATE_BUCKET_NAME already exists."
+
+            # Get the existing bucket's region
+            BUCKET_REGION=$(aws s3api get-bucket-location --bucket "$TF_STATE_BUCKET_NAME" --query "LocationConstraint" --output text)
+            if [ "$BUCKET_REGION" = "null" ]; then BUCKET_REGION="us-east-1"; fi  # AWS returns 'null' for us-east-1
+
+            # Compare regions
+            if [ "$BUCKET_REGION" != "$AWS_REGION" ]; then
+              echo "Error: S3 bucket $TF_STATE_BUCKET_NAME exists but in region $BUCKET_REGION, expected $AWS_REGION."
+              exit 1  # Stop execution if the region does not match
+            fi
+
+            echo "Enabling versioning on existing S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET_NAME" --versioning-configuration Status=Enabled || echo "⚠️ Versioning may already be enabled."
+
+            echo "Enabling server-side encryption on existing S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-encryption --bucket "$TF_STATE_BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' || echo "⚠️ Encryption may already be set."
+
+          else
+            echo "Creating S3 Bucket: $TF_STATE_BUCKET_NAME in region $AWS_REGION"
+            aws s3api create-bucket --bucket "$TF_STATE_BUCKET_NAME" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+
+            echo "Enabling versioning on newly created S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET_NAME" --versioning-configuration Status=Enabled
+
+            echo "Enabling server-side encryption on newly created S3 Bucket: $TF_STATE_BUCKET_NAME"
+            aws s3api put-bucket-encryption --bucket "$TF_STATE_BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          fi
+
+  deploy:
+    needs: create-tf-backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Init Terraform with backend config
+        working-directory: ./terraform
+        env:
+          TF_STATE_BUCKET_NAME: ${{ secrets.TF_STATE_BUCKET_NAME }}
+          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_STATE_BUCKET_NAME" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="region=$AWS_REGION"
+
+      - name: Apply Terraform
+        working-directory: ./terraform
+        run: |
+          TF_LOG=DEBUG terraform apply -auto-approve \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="aws_region=${{ secrets.AWS_REGION }}" \
+            -var="mongodb_uri=${{ secrets.MONGODB_URI }}"
+
+      - name: Upload to S3
+        run: aws s3 sync ./frontend/dist s3://trivia-app422025-bucket --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+          --distribution-id "${{ secrets.AWS_CF_DISTRIBUTION_ID }}" \
+          --paths "/*"
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Build backend
+        working-directory: ./backend
+        run: npm run build
+
+      - name: Package backend for Elastic Beanstalk
+        working-directory: ./backend
+        run: |
+          zip -r ../backend.zip . -x "node_modules/*" ".git/*" "*.env" "*.log"
+
+      - name: Get Terraform Outputs
+        id: tf
+        working-directory: ./terraform
+        run: |
+          echo "APP_NAME=$(terraform output -raw eb_application_name)" >> $GITHUB_ENV
+          echo "ENV_NAME=$(terraform output -raw eb_environment_name)" >> $GITHUB_ENV
+
+      - name: Deploy express.js backend to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v20
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: "${{ env.APP_NAME }}"
+          environment_name: "${{ env.ENV_NAME }}"
+          region: ${{ secrets.AWS_REGION }}
+          version_label: "backend-${{ github.sha }}"
+          deployment_package: "backend.zip"
+          env_vars: |
+            MONGODB_URI=${{ secrets.MONGODB_URI }},
+            NODE_ENV=production
