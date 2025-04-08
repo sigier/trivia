@@ -20,6 +20,13 @@ resource "aws_elastic_beanstalk_environment" "backend_env" {
     name      = "MONGODB_URI"
     value     = var.mongodb_uri
   }
+
+  setting {
+  namespace = "aws:elasticbeanstalk:application:environment"
+  name      = "NODE_ENV"
+  value     = "production"
+  }
+
   setting {
     namespace = "aws:autoscaling:launchconfiguration"
     name      = "InstanceType"
