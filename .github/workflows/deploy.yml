@@ -117,8 +117,8 @@ jobs:
         run: |
           echo "APP_NAME=$(terraform output -raw eb_application_name)" >> $GITHUB_ENV
           echo "ENV_NAME=$(terraform output -raw eb_environment_name)" >> $GITHUB_ENV
-          echo "📦 APP_NAME: $(terraform output -raw eb_application_name)"
-          echo "🌱 ENV_NAME: $(terraform output -raw eb_environment_name)"
+          echo "CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
+          echo "CLOUDFRONT_ID: $(terraform output -raw cloudfront_distribution_id)"
 
       - name: Upload to S3
         run: aws s3 sync ./frontend/dist s3://trivia-app422025-bucket --delete
@@ -126,7 +126,7 @@ jobs:
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-          --distribution-id "${{ secrets.AWS_CF_DISTRIBUTION_ID }}" \
+          --distribution-id "${{ env.CLOUDFRONT_ID }}" \
           --paths "/*"
 
       - name: Install backend dependencies

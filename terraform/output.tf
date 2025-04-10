@@ -7,3 +7,9 @@ output "eb_environment_name" {
   description = "Elastic Beanstalk environment name"
   value       = aws_elastic_beanstalk_environment.backend_env.name
 }
+
+
+
+output "cloudfront_distribution_id" {
+  value = aws_cloudfront_distribution.frontend.id
+}
