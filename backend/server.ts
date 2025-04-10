@@ -35,7 +35,7 @@ db.catch((err) => {
 });
 
 ensureInitialData();
-
+app.get("/api/health", (_, res) => res.send("OK"));
 app.use("/api", apiRouter);
 
 app.listen(port, () => {
