@@ -56,7 +56,7 @@ origin {
 }
 
   origin {
-    domain_name = "trivia-backend-app-env.eba-euynjztn.eu-central-1.elasticbeanstalk.com"
+    domain_name =  aws_elastic_beanstalk_environment.backend_env.cname
     origin_id   = "EBOrigin"
 
     custom_origin_config {
