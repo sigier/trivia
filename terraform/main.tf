@@ -1,5 +1,11 @@
 provider "aws" {
   region = "eu-central-1"
+
+    default_tags {
+    tags = {
+      Name = "trivia"
+    }
+  }
 }
 
 resource "aws_s3_bucket" "frontend" {
