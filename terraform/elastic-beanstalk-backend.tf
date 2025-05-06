@@ -76,5 +76,29 @@ setting {
   value     = "/health"
 }
 
+setting {
+  namespace = "aws:elasticbeanstalk:environment:process:default"
+  name      = "HealthCheckInterval"
+  value     = "60"
+}
+
+setting {
+  namespace = "aws:elasticbeanstalk:environment:process:default"
+  name      = "HealthCheckTimeout"
+  value     = "15"
+}
+
+setting {
+  namespace = "aws:elasticbeanstalk:environment:process:default"
+  name      = "HealthyThresholdCount"
+  value     = "2"
+}
+
+setting {
+  namespace = "aws:elasticbeanstalk:environment:process:default"
+  name      = "UnhealthyThresholdCount"
+  value     = "7"
+}
+
 
 }
