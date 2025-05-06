@@ -42,38 +42,9 @@ resource "aws_elastic_beanstalk_environment" "backend_env" {
     namespace = "aws:autoscaling:asg"
     name      = "MaxSize"
     value     = "3"
-  } 
-  
-  setting {
-    namespace = "aws:elb:healthcheck"
-    name      = "Interval"
-    value     = "30"
-  }
-
-  setting {
-    namespace = "aws:elb:healthcheck"
-    name      = "Timeout"
-    value     = "5"
-  }
-
-  setting {
-    namespace = "aws:elb:healthcheck"
-    name      = "HealthyThreshold"
-    value     = "2"
-  }
-
-  setting {
-    namespace = "aws:elb:healthcheck"
-    name      = "UnhealthyThreshold"
-    value     = "5"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:application"
-    name      = "Application Healthcheck URL"
-    value     = "/health"
-  }
-
+  }    
+ 
+ 
   setting {
     namespace = "aws:elasticbeanstalk:environment"
     name      = "EnvironmentType"
@@ -85,23 +56,25 @@ resource "aws_elastic_beanstalk_environment" "backend_env" {
     name      = "LoadBalancerType"
     value     = "application"
   }
+ 
 
   setting {
-    namespace = "aws:elb:listener:80"
-    name      = "ListenerProtocol"
-    value     = "HTTP"
-  }
+  namespace = "aws:elbv2:listener:default"
+  name      = "DefaultProcess"
+  value     = "default"
+}
 
-  setting {
-    namespace = "aws:elb:listener:80"
-    name      = "InstanceProtocol"
-    value     = "HTTP"
-  }
+setting {
+  namespace = "aws:elasticbeanstalk:environment:process:default"
+  name      = "Port"
+  value     = "3000"
+}
 
-  setting {
-    namespace = "aws:elb:listener:80"
-    name      = "InstancePort"
-    value     = "3000"
-  }
+setting {
+  namespace = "aws:elasticbeanstalk:environment:process:default"
+  name      = "HealthCheckPath"
+  value     = "/health"
+}
+
 
 }
