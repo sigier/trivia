@@ -62,43 +62,35 @@ resource "aws_elastic_beanstalk_environment" "backend_env" {
   namespace = "aws:elbv2:listener:default"
   name      = "DefaultProcess"
   value     = "default"
-}
+} 
 
-setting {
-  namespace = "aws:elasticbeanstalk:environment:process:default"
-  name      = "Port"
-  value     = "3000"
-}
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "HealthCheckPath"
+    value     = "/health"
+  }
 
-setting {
-  namespace = "aws:elasticbeanstalk:environment:process:default"
-  name      = "HealthCheckPath"
-  value     = "/health"
-}
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "HealthCheckInterval"
+    value     = "60"
+  }
 
-setting {
-  namespace = "aws:elasticbeanstalk:environment:process:default"
-  name      = "HealthCheckInterval"
-  value     = "60"
-}
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "HealthCheckTimeout"
+    value     = "15"
+  }
 
-setting {
-  namespace = "aws:elasticbeanstalk:environment:process:default"
-  name      = "HealthCheckTimeout"
-  value     = "15"
-}
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "HealthyThresholdCount"
+    value     = "2"
+  }
 
-setting {
-  namespace = "aws:elasticbeanstalk:environment:process:default"
-  name      = "HealthyThresholdCount"
-  value     = "2"
-}
-
-setting {
-  namespace = "aws:elasticbeanstalk:environment:process:default"
-  name      = "UnhealthyThresholdCount"
-  value     = "7"
-}
-
-
+  setting {
+    namespace = "aws:elasticbeanstalk:environment:process:default"
+    name      = "UnhealthyThresholdCount"
+    value     = "7"
+  }
 }

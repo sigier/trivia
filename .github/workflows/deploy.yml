@@ -129,14 +129,6 @@ jobs:
           --distribution-id "${{ env.CLOUDFRONT_ID }}" \
           --paths "/*"
 
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: npm install
-
-      - name: Build backend
-        working-directory: ./backend
-        run: npm run build
-
       - name: Package backend for Elastic Beanstalk
         working-directory: ./backend
         run: |
