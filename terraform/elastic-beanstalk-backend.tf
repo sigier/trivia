@@ -93,4 +93,10 @@ resource "aws_elastic_beanstalk_environment" "backend_env" {
     name      = "UnhealthyThresholdCount"
     value     = "7"
   }
+
+    setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "EC2KeyName"
+    value     = "ebinst"
+  }
 }
