@@ -99,4 +99,10 @@ resource "aws_elastic_beanstalk_environment" "backend_env" {
     name      = "EC2KeyName"
     value     = "ebinst"
   }
+
+  setting {
+  namespace = "aws:elasticbeanstalk:healthreporting:system"
+  name      = "SystemType"
+  value     = "basic"
+}
 }
